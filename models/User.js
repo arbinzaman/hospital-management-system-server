@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const validator = require("validator");
-// const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const moment = require('moment/moment');
 
 const userSchema = mongoose.Schema(
     {
@@ -40,15 +40,15 @@ const userSchema = mongoose.Schema(
 
         role: {
             type: String,
-            enum: ["doctor", "admin", "super-admin", "receptionist"],
-            required: [true, "Please provide a role in your organization."]
+            enum: ["doctor", "admin", "super-admin", "receptionist", "accountant", 'labaratorist'],
+            required: [true, "Please provide a role for your organization."]
         },
 
         firstName: {
             type: String,
             required: [true, "Please provide a first name"],
             trim: true,
-            minLength: [3, "Name must be at least 3 characters."],
+            minLength: [2, "Name must be at least 2 characters."],
             maxLength: [100, "Name is too large"],
         },
         lastName: {
@@ -62,7 +62,6 @@ const userSchema = mongoose.Schema(
 
         imageURL: {
             type: String,
-            validate: [validator.isURL, "Please provide a valid url"],
         },
 
         status: {
@@ -74,46 +73,57 @@ const userSchema = mongoose.Schema(
         confirmationToken: String,
         confirmationTokenExpires: Date,
 
-        patientAdded: [{
+        addedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Patient",
-            default: undefined
-        }],
-
-        userAdded: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: undefined
-        }],
-
-        addedBy : {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: undefined
+            ref: "User"
+        },
+        serialId: {
+            type: String,
+            unique: true
         }
-
-
-        // passwordChangedAt: Date,
-        // passwordResetToken: String,
-        // passwordResetExpires: Date,
     },
     {
         timestamps: true,
     }
 );
 
+
 userSchema.pre("save", function (next) {
+
     if (!this.isModified("password")) {
         //  only run if password is modified, otherwise it will change every time we save the user!
         return next();
     }
-    const password = this.password;
 
-    const hashedPassword = bcrypt.hashSync(password);
-
+    const hashedPassword = bcrypt.hashSync(this.password);
     this.password = hashedPassword;
 
-    next();
+    let doc = this
+
+    if (this.isNew) {
+
+        let currentDate = moment().format('YYMMDD');
+
+        mongoose.model('User').findOne({
+            serialId: { $regex: ('^' + currentDate) }
+        },
+            {},
+            { sort: { 'serialId': -1 } },
+            function (err, lastUser) {
+                if (err) {
+                    return next(err);
+                }
+                let serialNumber = currentDate + '00001';
+                if (lastUser) {
+                    let lastSerialNumber = parseInt(lastUser.serialId.substring(8), 10);
+                    serialNumber = currentDate + ('00000' + (lastSerialNumber + 1)).slice(-5);
+                }
+                doc.serialId = serialNumber;
+                next();
+            });
+    } else {
+        next();
+    }
 });
 
 userSchema.methods.comparePassword = function (password, hash) {
@@ -121,19 +131,9 @@ userSchema.methods.comparePassword = function (password, hash) {
     return isPasswordValid;
 };
 
-// userSchema.methods.generateConfirmationToken = function () {
-//     const token = crypto.randomBytes(32).toString("hex");
-
-//     this.confirmationToken = token;
-
-//     const date = new Date();
-
-//     date.setDate(date.getDate() + 1);
-
-//     this.confirmationTokenExpires = date;
-
-//     return token;
-// };
+userSchema.methods.updatePass = function (password) {
+    return bcrypt.hashSync(password)
+}
 
 const User = mongoose.model("User", userSchema)
 

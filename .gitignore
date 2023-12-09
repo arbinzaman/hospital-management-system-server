@@ -2,3 +2,5 @@
 /.env
 /*.zip
 .htaccess
+/images
+/pdfs

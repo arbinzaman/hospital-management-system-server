@@ -1,48 +1,14 @@
-const { signupService, findUserByEmail, findUserByToken, updateUser, findAllUserService } = require("../services/user.service");
-// const { sendMailWithMailGun } = require("../utils/email");
+const {
+  signupService,
+  findAllUserService,
+  findUserByEmailService,
+  getUserInfoService,
+  getAllDoctorsService,
+  getUserByIdService,
+  updatePassService,
+  updateImageUrlService,
+  deleteUserByIdService } = require("../services/user.service");
 const { generateToken } = require("../utils/token");
-
-exports.signup = async (req, res) => {
-  try {
-
-    const { role } = req.body
-
-    if (role !== 'admin' && role !== 'super-admin') {
-      return res.status(403).json({
-        status: "fail",
-        error: "Only admins can create account for " + role
-      })
-    }
-
-    const user = await signupService(req.body);
-
-    // const token = user.generateConfirmationToken();
-
-    await user.save()
-
-    // await user.save();
-
-    // const mailData = {
-    //   to: [user.email],
-    //   subject: "Verify your Account",
-    //   text: `Thank you for creating your account. Please confirm your account here: ${
-    //     req.protocol
-    //   }://${req.get("host")}${req.originalUrl}/confirmation/${token}`,
-    // };
-
-    // await sendMailWithMailGun(mailData);
-
-    res.status(200).json({
-      status: "success",
-      message: "Successfully signed up",
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "fail",
-      error,
-    });
-  }
-};
 
 exports.login = async (req, res) => {
   try {
@@ -55,7 +21,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    const user = await findUserByEmail(email);
+    const user = await findUserByEmailService(email)
 
     if (!user) {
       return res.status(401).json({
@@ -74,38 +40,99 @@ exports.login = async (req, res) => {
       });
     }
 
-    // if (user.status != "active") {
-    //   return res.status(401).json({
-    //     status: "fail",
-    //     error: "Your account is not active yet.",
-    //   });
-    // }
-
     const token = generateToken(user);
 
-    const { password: pwd, patientAdded, userAdded, addedBy, ...others } = user.toObject();
+    const { password: pwd, ...others } = user.toObject()
 
     res.status(200).json({
       status: "success",
       message: "Successfully logged in",
       data: {
-        user: others,
+        data: others,
         token,
       },
     });
   } catch (error) {
     res.status(500).json({
       status: "fail",
-      error,
+      error: error.message,
     });
   }
 };
 
+exports.updateProfilePicture = async (req, res) => {
+  try {
+
+    const url = await updateImageUrlService(req)
+
+    res.status(200).json({
+      status: "success",
+      message: "Profile Picture Updated Sucessfully",
+      url
+    })
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      error: error.message
+    })
+  }
+}
+
+exports.updatePass = async (req, res) => {
+  try {
+
+    const { password, newPassword } = req.body
+
+    if (!newPassword || !password) {
+      return res.status(401).json({
+        status: "fail",
+        error: "Please provide required credentials",
+      });
+    }
+
+    const { email } = req.user;
+
+    const user = await findUserByEmailService(email)
+
+    if (!user) {
+      return res.status(401).json({
+        status: "fail",
+        error: "No user found. Please create an account",
+      });
+    }
+
+    const isPasswordValid = user.comparePassword(password, user.password);
+
+
+    if (!isPasswordValid) {
+      return res.status(403).json({
+        status: "fail",
+        error: "Password is not correct",
+      });
+    }
+
+    const updatesPass = user.updatePass(newPassword)
+
+    await updatePassService(updatesPass, user._id)
+
+    res.status(200).json({
+      status: 'success',
+      message: "Password Updated Successfully"
+    })
+
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      error: error.message,
+    });
+  }
+}
+
 exports.getMe = async (req, res) => {
   try {
-    const user = await findUserByEmail(req.user?.email);
+    const user = await getUserInfoService(req.user?.email);
 
-    const { password: pwd, ...others } = user.toObject();
+    const { password, ...others } = user.toObject()
 
     res.status(200).json({
       status: "success",
@@ -114,18 +141,56 @@ exports.getMe = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       status: "fail",
-      error,
+      error: error.message,
     });
   }
 };
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await findAllUserService();
+
+    if (!req?.admin) {
+      return res.status(403).json({
+        status: "fail",
+        message: "You cannot access this data",
+      });
+    }
+
+    const { users, total } = await findAllUserService(req.pagination);
+
+    const { page } = req.pagination;
 
     res.status(200).json({
       status: "success",
       data: users,
+      page,
+      total,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      error: error.message,
+    });
+  }
+};
+
+exports.getUserById = async (req, res) => {
+  try {
+
+    if (!req?.admin) {
+      return res.status(403).json({
+        status: "fail",
+        message: "You do not have access to this data.",
+      });
+    }
+
+    const { userId } = req.params
+
+    const user = await getUserByIdService(userId)
+
+    res.status(200).json({
+      status: "success",
+      data: user
     });
   } catch (error) {
     res.status(500).json({
@@ -133,7 +198,7 @@ exports.getAllUsers = async (req, res) => {
       error,
     });
   }
-};
+}
 
 exports.staffSignUp = async (req, res) => {
   try {
@@ -141,13 +206,13 @@ exports.staffSignUp = async (req, res) => {
     if (!req?.admin) {
       return res.status(403).json({
         status: "fail",
-        error,
+        message: "You cannot create accout for a " + req.body.role,
       });
     }
 
-    const user = await signupService({...req.body, addedBy: req.adminId});
+    const user = await signupService({ ...req.body, addedBy: req.adminId });
 
-    await user.save({ validateBeforeSave: false });
+    await user.save();
 
     res.status(200).json({
       status: "success",
@@ -157,7 +222,61 @@ exports.staffSignUp = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       status: "fail",
-      error,
+      error: error.message,
+    });
+  }
+}
+
+exports.getAllDoctors = async (req, res) => {
+  try {
+
+    const { doctors, total } = await getAllDoctorsService(req.pagination)
+
+    const { page } = req.pagination;
+
+    res.status(200).json({
+      status: "success",
+      data: doctors,
+      total, page,
+    })
+
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      message: "Internal server error",
+    });
+  }
+}
+
+exports.deleteUserById = async (req, res) => {
+  try {
+
+    if (!req?.admin) {
+      return res.status(403).json({
+        status: "fail",
+        message: "You cannot delete this user",
+      });
+    }
+
+    const { userId } = req.params
+
+    const data = await deleteUserByIdService(userId)
+
+    if (!data.deletedCount) {
+      return res.status(404).json({
+        status: "fail",
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "User deleted successfully"
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      error: error.message,
     });
   }
 }
@@ -196,7 +315,6 @@ exports.staffSignUp = async (req, res) => {
 //       message: "Successfully activated your account.",
 //     });
 //   } catch (error) {
-//     console.log(error);
 //     res.status(500).json({
 //       status: "fail",
 //       error,
