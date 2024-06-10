@@ -1,7 +1,7 @@
 /node_modules
-/.env
-/*.zip
-.htaccess
-/images
-/pdfs
+# /.env
+# /*.zip
+# .htaccess
+# /images
+# /pdfs
 .vercel
