@@ -4,7 +4,7 @@ const app = express()
 
 // middlewares
 app.use(express.json())
-app.use(cors())
+app.use(cors({origin: '*'}))
 app.use('/images', express.static('images'));
 app.use('/pdfs', express.static('pdfs'));
 
