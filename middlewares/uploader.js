@@ -2,20 +2,24 @@ const multer = require("multer");
 const path = require("path");
 
 const imageStorage = multer.diskStorage({
-  destination: "images/",
+  destination: (req, file, cb) => {
+    cb(null, '/tmp'); // Use /tmp instead of "images/"
+  },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, uniqueSuffix + "-" + file.originalname)
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + "-" + file.originalname);
   }
-})
+});
 
 const pdfStorage = multer.diskStorage({
-  destination: "pdfs/",
+  destination: (req, file, cb) => {
+    cb(null, '/tmp'); // Use /tmp instead of "pdfs/"
+  },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, uniqueSuffix + "-" + file.originalname)
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + "-" + file.originalname);
   }
-})
+});
 
 const imageUploader = multer({
   storage: imageStorage,
